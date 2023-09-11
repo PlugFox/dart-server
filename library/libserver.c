@@ -1,3 +1,5 @@
+#include "dart_api.h"
+#include "dart_api_dl.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -95,7 +97,14 @@ void start_threads(struct sockaddr_in addr) {
 // ip - address to listen, e.g. 0.0.0.0
 // port - port to listen, e.g. 8080
 // backlog - max number of connections, e.g. 128
-void start_server(const char *ip, int port, int backlog) {
+void start_server(const char *ip, int port, int backlog, int64_t *ports,
+                  int length) {
+  fprintf(stderr, "Received %d ports\n", length);
+  for (int i = 0; i < length; i++) {
+    fprintf(stderr, "Port %d: %ld\n", i + 1, ports[i]);
+    bool result = Dart_PostCObject_DL(ports[i], ???); // ffigen this
+  }
+
   // Create address
   struct sockaddr_in addr;
   uv_ip4_addr(ip, port, &addr);
@@ -112,6 +121,6 @@ void start_server(const char *ip, int port, int backlog) {
 
 // Entry point
 int main() {
-  start_server("0.0.0.0", 5050, 128);
+  start_server("0.0.0.0", 5050, 128, NULL, 0);
   return 0;
 }

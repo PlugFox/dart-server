@@ -20,6 +20,16 @@
                 "isDefault": false
             },
             "problemMatcher": []
+        },
+        {
+            "label": "build clean",
+            "type": "shell",
+            "command": "make clean",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": []
         }
     ]
 }

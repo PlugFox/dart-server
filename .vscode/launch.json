@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Server",
+            "name": "[C] Debug Server",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/server",
+            "program": "${workspaceFolder}/build/libserver.so",
             "args": [], // Аргументы командной строки, если они нужны
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
