@@ -7,5 +7,5 @@
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y gcc make cmake g++ libuv1-dev pkg-config gdb
+sudo apt-get install -y gcc make cmake g++ libuv1-dev pkg-config gdb clang-format
 ```
