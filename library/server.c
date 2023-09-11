@@ -106,7 +106,7 @@ void start_server(const char *ip, int port, int backlog) {
   // Just avoid exit and keep server running
   // Emulate some work
   while (1) {
-    sleep(1); // uv_sleep(1);
+    uv_sleep(1000);
   }
 }
 
