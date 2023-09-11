@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -80,6 +81,15 @@ void main([List<String>? args]) => Future<void>(() async {
           .asTypedList(ports.length)
           .setAll(0, [for (final port in ports) port.nativePort]);
 
+      print('Try to call myDartFunction() from C...');
+      final callbackPointer =
+          Pointer.fromFunction<Void Function()>(myDartCallback);
+      final nativeCallback = dylib.lookupFunction<
+          Void Function(Pointer<NativeFunction<Void Function()>>),
+          void Function(Pointer<NativeFunction<Void Function()>>)>("callback");
+      nativeCallback(callbackPointer);
+      // nativeCallback.free();
+
       print('Starting server...');
       startServer(ip, port, backlog, ptr, ports.length);
 
@@ -89,6 +99,22 @@ void main([List<String>? args]) => Future<void>(() async {
     });
 
 void handler(SendPort sendPort) {
+  final DynamicLibrary dylib;
+  if (Platform.isLinux) {
+    dylib = DynamicLibrary.open('build/libserver.so');
+  } else if (Platform.isMacOS) {
+    dylib = DynamicLibrary.open('build/libserver.dylib');
+  } else if (Platform.isWindows) {
+    dylib = DynamicLibrary.open('build/server.dll');
+  } else {
+    throw Exception('Platform not supported');
+  }
+  final callbackPointer = Pointer.fromFunction<Void Function()>(myDartCallback);
+  final nativeCallback = dylib.lookupFunction<
+      Void Function(Pointer<NativeFunction<Void Function()>>),
+      void Function(Pointer<NativeFunction<Void Function()>>)>("callback");
+  nativeCallback(callbackPointer);
+
   final receivePort = ReceivePort();
   sendPort.send(receivePort.sendPort);
   receivePort.listen((message) {
@@ -105,4 +131,9 @@ void handler(SendPort sendPort) {
   }, onDone: () {
     print('Done');
   });
+}
+
+final int a = math.Random().nextInt(100);
+void myDartCallback() {
+  print('Function called from C!, rnd = $a');
 }

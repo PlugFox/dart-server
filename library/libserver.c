@@ -149,6 +149,8 @@ void start_server(const char *ip, int port, int backlog, int64_t *ports,
   }
 }
 
+void callback(void (*fn)()) { fn(); }
+
 // Entry point
 int main() {
   start_server("0.0.0.0", 5050, 128, NULL, 0);
