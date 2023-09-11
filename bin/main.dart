@@ -2,20 +2,20 @@ import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
 typedef _DartInitializeApiDLFunc = Pointer<Void> Function(Pointer<Void>);
 
-typedef StartServerC = Void Function(
+typedef _StartServerC = Void Function(
   Pointer<Utf8> ip,
   Int32 port,
   Int32 backlog,
   Pointer<Uint64> ports,
   Int32 portsLength,
 );
-
-typedef StartServerDart = void Function(
+typedef _StartServerDart = void Function(
   Pointer<Utf8> ip,
   int port,
   int backlog,
@@ -36,7 +36,7 @@ void main([List<String>? args]) => Future<void>(() async {
       }
 
       final startServer =
-          dylib.lookupFunction<StartServerC, StartServerDart>('start_server');
+          dylib.lookupFunction<_StartServerC, _StartServerDart>('start_server');
 
       final ip = '127.0.0.1'.toNativeUtf8();
       final port = 5050;
@@ -67,8 +67,7 @@ void main([List<String>? args]) => Future<void>(() async {
         sendPort.nativePort;
       }
 
-      // init native functions
-
+      // Enable using the symbols in dart_api_dl.h.
       final _DartInitializeApiDLFunc dartInitializeApiDL = dylib
           .lookup<NativeFunction<_DartInitializeApiDLFunc>>(
               "Dart_InitializeApiDL")
@@ -93,6 +92,17 @@ void handler(SendPort sendPort) {
   final receivePort = ReceivePort();
   sendPort.send(receivePort.sendPort);
   receivePort.listen((message) {
-    print('Received message: $message');
+    switch (message) {
+      case Uint8ClampedList list:
+        print('Received message: (${list.join(', ')})');
+      case String msg:
+        print('Received message: $msg');
+      default:
+        print('Received message: $message (type: ${message.runtimeType})');
+    }
+  }, onError: (error) {
+    print('Error: $error');
+  }, onDone: () {
+    print('Done');
   });
 }
