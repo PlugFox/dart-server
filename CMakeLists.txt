@@ -9,15 +9,15 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON) # -fPIC
 set(CMAKE_C_FLAGS_DEBUG "-g")
 set(CMAKE_C_FLAGS_RELEASE "-O3")
 
-include_directories($ENV{DART_SDK}/include/)
-
 # Находим необходимые библиотеки
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUV REQUIRED IMPORTED_TARGET libuv)
 
 # Добавляем наш исходный файл
 #add_executable(server library/server.c)
-add_library(server SHARED library/libserver.c)
+add_library(server SHARED library/libserver.c library/libserver.def library/dart/dart_api_dl.c)
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/library)
 
 # Линкуем наш исполняемый файл с библиотекой libuv
 target_link_libraries(server PRIVATE PkgConfig::LIBUV)
@@ -27,6 +27,15 @@ set_target_properties(server PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build"
 )
+
+#set_target_properties(server PROPERTIES
+#    FRAMEWORK TRUE
+#    PUBLIC_HEADER libserver.h
+#    OUTPUT_NAME libserver
+#    VERSION ${PROJECT_VERSION}
+#    SOVERSION 1
+#    OUTPUT_NAME "libserver"
+#)
 
 # Настройка имени библиотеки в зависимости от платформы
 if(WIN32)

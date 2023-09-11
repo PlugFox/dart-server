@@ -12,7 +12,7 @@ sudo apt-get update
 sudo apt-get install -y gcc make cmake g++ libuv1-dev pkg-config gdb clang-format
 ```
 
-Specify the [Dart SDK](https://dart.dev/get-dart) path, e.g.:
+Setup the [Dart SDK](https://dart.dev/get-dart) path, e.g.:
 
 ```bash
 sudo apt-get update
@@ -22,7 +22,11 @@ echo 'deb [signed-by=/usr/share/keyrings/dart.gpg arch=amd64] https://storage.go
 sudo apt-get update
 sudo apt-get install dart
 echo 'PATH="$PATH:/usr/lib/dart/bin"' >> ~/.zshrc
-echo 'export DART_SDK=/usr/lib/dart' >> ~/.zshrc
 echo 'PATH="$PATH:/usr/lib/dart/bin"' >> ~/.profile
-echo 'export DART_SDK=/usr/lib/dart' >> ~/.profile
+```
+
+Copy the `include` from the Dart SDK to the `library/dart` directory:
+
+```bash
+cp -r /usr/lib/dart/include library/dart
 ```

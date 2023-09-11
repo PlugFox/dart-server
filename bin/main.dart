@@ -5,6 +5,8 @@ import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
 
+typedef _DartInitializeApiDLFunc = Pointer<Void> Function(Pointer<Void>);
+
 typedef StartServerC = Void Function(
   Pointer<Utf8> ip,
   Int32 port,
@@ -65,14 +67,26 @@ void main([List<String>? args]) => Future<void>(() async {
         sendPort.nativePort;
       }
 
-      final ptr = calloc<Uint64>(isolates.length);
-      ptr.asTypedList(isolates.length).setAll(0, [
-        for (var i = 0; i < isolates.length; i++) isolates[i].$2.nativePort
-      ]);
+      // init native functions
 
-      startServer(ip, port, backlog, ptr, isolates.length);
+      final _DartInitializeApiDLFunc dartInitializeApiDL = dylib
+          .lookup<NativeFunction<_DartInitializeApiDLFunc>>(
+              "Dart_InitializeApiDL")
+          .asFunction();
+      dartInitializeApiDL(NativeApi.initializeApiDLData);
+
+      final ports = [for (final isolate in isolates) isolate.$2];
+      final ptr = calloc<Uint64>(ports.length);
+      ptr
+          .asTypedList(ports.length)
+          .setAll(0, [for (final port in ports) port.nativePort]);
+
+      print('Starting server...');
+      startServer(ip, port, backlog, ptr, ports.length);
 
       calloc.free(ptr);
+
+      await Future.delayed(Duration(seconds: 10));
     });
 
 void handler(SendPort sendPort) {
