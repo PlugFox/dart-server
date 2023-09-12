@@ -5,18 +5,6 @@
             "name": "[C] Debug Server",
             "type": "cppdbg",
             "request": "launch",
-            "windows": {
-                "program": "${workspaceFolder}/build/server.exe",
-                "args": []
-            },
-            "linux": {
-                "program": "${workspaceFolder}/build/libserver",
-                "args": []
-            },
-            "osx": {
-                "program": "${workspaceFolder}/build/libserver",
-                "args": []
-            },
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
@@ -39,6 +27,8 @@
                 "exceptions": true
             },
             "linux": {
+                "program": "${workspaceFolder}/build/server",
+                "args": [],
                 "MIMode": "gdb",
                 "miDebuggerPath": "/usr/bin/gdb",
                 "setupCommands": [
@@ -50,6 +40,8 @@
                 ]
             },
             "windows": {
+                "program": "${workspaceFolder}/build/server.exe",
+                "args": [],
                 "MIMode": "gdb",
                 "miDebuggerPath": "gdb.exe",
                 "setupCommands": [
@@ -61,7 +53,9 @@
                 ]
             },
             "osx": {
-                "MIMode": "lldb"
+                "MIMode": "lldb",
+                "program": "${workspaceFolder}/build/server",
+                "args": []
             }
         }
     ]

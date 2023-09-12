@@ -13,6 +13,8 @@
   char *message;
 } Request; */
 
-void start_server(const char *ip, int port, int backlog, int64_t *ports, int ports_length);
+DART_EXPORT void start_server(const char *ip, int port, int backlog, int64_t *ports, int ports_length);
+
+DART_EXPORT intptr_t init_dart_api(void *data);
 
 #endif

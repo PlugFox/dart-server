@@ -61,7 +61,7 @@ void server(
 
   // Enable using the symbols in dart_api_dl.h.
   final _DartInitializeApiDLFunc dartInitializeApiDL = dylib
-      .lookup<NativeFunction<_DartInitializeApiDLFunc>>("Dart_InitializeApiDL")
+      .lookup<NativeFunction<_DartInitializeApiDLFunc>>("init_dart_api")
       .asFunction();
   dartInitializeApiDL(NativeApi.initializeApiDLData);
 
