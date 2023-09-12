@@ -10,9 +10,9 @@
 #define DEFAULT_THREAD_COUNT 4
 
 uv_barrier_t barrier;
+int thread_count = DEFAULT_THREAD_COUNT;
 uv_loop_t *loops[DEFAULT_THREAD_COUNT];
 uv_tcp_t servers[DEFAULT_THREAD_COUNT];
-int thread_count = DEFAULT_THREAD_COUNT;
 
 // Обработчики соединений
 
@@ -127,9 +127,9 @@ void send_data_message(uint64_t port, char *message) {
 // port - port to listen, e.g. 8080
 // backlog - max number of connections, e.g. 128
 void start_server(const char *ip, int port, int backlog, int64_t *ports,
-                  int length) {
-  fprintf(stderr, "Received %d ports\n", length);
-  for (int i = 0; i < length; i++) {
+                  int ports_length) {
+  fprintf(stderr, "Received %d ports\n", ports_length);
+  for (int i = 0; i < ports_length; i++) {
     fprintf(stderr, "Port %d: %ld\n", i + 1, ports[i]);
 
     send_data_message(ports[i], "Hello from C");

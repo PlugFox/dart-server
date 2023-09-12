@@ -76,11 +76,19 @@ log.pana.json
 /test/.test_coverage.dart
 
 # C/C++ related
+# Prerequisites
+*.d
+
 # Object files
 *.o
 *.ko
 *.obj
 *.elf
+
+# Linker output
+*.ilk
+*.map
+*.exp
 
 # Precompiled Headers
 *.gch
@@ -92,7 +100,8 @@ log.pana.json
 *.la
 *.lo
 
-# Compiled Dynamic libraries
+# Shared objects (inc. Windows DLLs)
+*.dll
 *.so
 *.so.*
 *.dylib
@@ -103,14 +112,38 @@ log.pana.json
 *.app
 *.i*86
 *.x86_64
+*.hex
 
-# Temp files
-*.swp
-*.swo
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
 
-# CMake generated directories
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+# macOS related files
+.DS_Store
+
+# Build output
 build/
-*.cmake
 
-# Other
+# CMakeList
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+# Trash
 *.log
+*.swp
+*~
+
+# clang
+.cache/

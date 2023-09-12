@@ -2,15 +2,17 @@
     "configurations": [
         {
             "name": "WSL",
-            "intelliSenseMode": "gcc-x64",
             "includePath": [
-                "${workspaceFolder}/**",
+                "${workspaceFolder}/library",
                 "/usr/include/c++/11",
                 "/usr/include/x86_64-linux-gnu/c++/11"
             ],
-            "compilerPath": "/usr/bin/gcc",
+            "compilerPath": "clang",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64",
             "compilerArgs": [
-                "-std=c11"
+                "-std=c17"
             ],
             "browse": {
                 "path": [

@@ -5,31 +5,50 @@
             "label": "build debug",
             "type": "shell",
             "command": "make debug",
+            "windows": {},
+            "linux": {},
+            "osx": {},
+            "dependsOn": [],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "problemMatcher": []
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "compiler: clang"
         },
         {
             "label": "build release",
             "type": "shell",
             "command": "make release",
+            "windows": {},
+            "linux": {},
+            "osx": {},
+            "dependsOn": [],
             "group": {
                 "kind": "build",
                 "isDefault": false
             },
-            "problemMatcher": []
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "compiler: clang"
         },
         {
             "label": "build clean",
+            "windows": {},
+            "linux": {},
+            "osx": {},
+            "dependsOn": [],
             "type": "shell",
             "command": "make clean",
             "group": {
                 "kind": "build",
                 "isDefault": false
             },
-            "problemMatcher": []
+            "problemMatcher": [],
+            "detail": "clear"
         }
     ]
 }

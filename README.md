@@ -7,9 +7,20 @@
 
 Install dependencies:
 
+- `make`: Build management tool.
+- `cmake`: Cross-platform build automation system.
+- `clang`: Compiler for C, C++, and Objective-C.
+- `ninja-build`: Small build system focused on speed.
+- `llvm`: Collection of modular and reusable compilers and toolchains.
+- `libuv1-dev`: Cross-platform asynchronous I/O support library.
+- `pkg-config`: Tool that helps build scripts determine libraries and their locations.
+- `gdb`: GNU Debugger.
+- `clang-format`: Tool for automatic code formatting.
+
+
 ```bash
 sudo apt-get update
-sudo apt-get install -y gcc make cmake g++ libuv1-dev pkg-config gdb clang-format
+sudo apt-get install -y make cmake clang ninja-build llvm libuv1-dev pkg-config gdb clang-format
 ```
 
 Setup the [Dart SDK](https://dart.dev/get-dart) path, e.g.:

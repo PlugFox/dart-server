@@ -24,81 +24,95 @@ typedef _StartServerDart = void Function(
   int portsLength,
 );
 
+/// Entry point
 void main([List<String>? args]) => Future<void>(() async {
-      final DynamicLibrary dylib;
-      if (Platform.isLinux) {
-        dylib = DynamicLibrary.open('build/libserver.so');
-      } else if (Platform.isMacOS) {
-        dylib = DynamicLibrary.open('build/libserver.dylib');
-      } else if (Platform.isWindows) {
-        dylib = DynamicLibrary.open('build/server.dll');
-      } else {
-        throw Exception('Platform not supported');
-      }
-
-      final startServer =
-          dylib.lookupFunction<_StartServerC, _StartServerDart>('start_server');
-
-      final ip = '127.0.0.1'.toNativeUtf8();
-      final port = 5050;
-      final backlog = 128;
-
-      final isolates = <(Isolate, SendPort)>[];
-      for (var i = 1; i <= 4; i++) {
-        final receivePort = ReceivePort();
-        final isolate = await Isolate.spawn(
-          handler,
-          receivePort.sendPort,
-          errorsAreFatal: false,
-          debugName: 'Isolate#$i',
-        );
-        final completer = Completer<SendPort>();
-        receivePort.listen((message) {
-          switch (message) {
-            case SendPort sendPort:
-              if (!completer.isCompleted) {
-                completer.complete(sendPort);
-              }
-            default:
-              print('Message from isolate: $message');
-          }
-        });
-        final sendPort = await completer.future;
-        isolates.add((isolate, sendPort));
-        sendPort.nativePort;
-      }
-
-      // Enable using the symbols in dart_api_dl.h.
-      final _DartInitializeApiDLFunc dartInitializeApiDL = dylib
-          .lookup<NativeFunction<_DartInitializeApiDLFunc>>(
-              "Dart_InitializeApiDL")
-          .asFunction();
-      dartInitializeApiDL(NativeApi.initializeApiDLData);
-
-      final ports = [for (final isolate in isolates) isolate.$2];
-      final ptr = calloc<Uint64>(ports.length);
-      ptr
-          .asTypedList(ports.length)
-          .setAll(0, [for (final port in ports) port.nativePort]);
-
-      print('Try to call myDartFunction() from C...');
-      final callbackPointer =
-          Pointer.fromFunction<Void Function()>(myDartCallback);
-      final nativeCallback = dylib.lookupFunction<
-          Void Function(Pointer<NativeFunction<Void Function()>>),
-          void Function(Pointer<NativeFunction<Void Function()>>)>("callback");
-      nativeCallback(callbackPointer);
-      // nativeCallback.free();
-
-      print('Starting server...');
-      startServer(ip, port, backlog, ptr, ports.length);
-
-      calloc.free(ptr);
-
-      await Future.delayed(Duration(seconds: 10));
+      final receivePort = ReceivePort();
+      final isolate = await Isolate.spawn(
+        server,
+        (
+          addr: '0.0.0.0',
+          port: 5050,
+          backlog: 128,
+          sendPort: receivePort.sendPort
+        ),
+        errorsAreFatal: false,
+        debugName: 'Server',
+      );
     });
 
-void handler(SendPort sendPort) {
+/// Server isolated function.
+void server(
+    ({
+      String addr,
+      int port,
+      int backlog,
+      SendPort sendPort,
+    }) args) async {
+  final DynamicLibrary dylib;
+  if (Platform.isLinux) {
+    dylib = DynamicLibrary.open('build/libserver.so');
+  } else if (Platform.isMacOS) {
+    dylib = DynamicLibrary.open('build/libserver.dylib');
+  } else if (Platform.isWindows) {
+    dylib = DynamicLibrary.open('build/server.dll');
+  } else {
+    throw Exception('Platform not supported');
+  }
+
+  // Enable using the symbols in dart_api_dl.h.
+  final _DartInitializeApiDLFunc dartInitializeApiDL = dylib
+      .lookup<NativeFunction<_DartInitializeApiDLFunc>>("Dart_InitializeApiDL")
+      .asFunction();
+  dartInitializeApiDL(NativeApi.initializeApiDLData);
+
+  // Spawn worker isolates.
+
+  final workers = <(Isolate, SendPort)>[];
+  for (var i = 1; i <= 4; i++) {
+    final receivePort = ReceivePort();
+    final isolate = await Isolate.spawn(
+      worker,
+      receivePort.sendPort,
+      errorsAreFatal: false,
+      debugName: 'Worker#$i',
+    );
+    final completer = Completer<SendPort>();
+    receivePort.listen((message) {
+      switch (message) {
+        case SendPort sendPort:
+          if (!completer.isCompleted) {
+            completer.complete(sendPort);
+          }
+        default:
+          print('Message from isolate: $message');
+      }
+    });
+    final sendPort = await completer.future;
+    workers.add((isolate, sendPort));
+    sendPort.nativePort;
+  }
+
+  final ports = [for (final isolate in workers) isolate.$2];
+  final ptr = calloc<Uint64>(ports.length);
+  ptr
+      .asTypedList(ports.length)
+      .setAll(0, [for (final port in ports) port.nativePort]);
+
+  // Get the function pointer
+  final startServer =
+      dylib.lookupFunction<_StartServerC, _StartServerDart>('start_server');
+
+  final ip = args.addr.toNativeUtf8();
+  final port = args.port;
+  final backlog = args.backlog;
+
+  print('Starting server...');
+  startServer(ip, port, backlog, ptr, ports.length);
+  //calloc.free(ptr);
+}
+
+/// Worker isolated function.
+void worker(SendPort sendPort) {
   final DynamicLibrary dylib;
   if (Platform.isLinux) {
     dylib = DynamicLibrary.open('build/libserver.so');
