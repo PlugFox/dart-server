@@ -4,10 +4,12 @@ project(LibuvServer VERSION 1.0.0 LANGUAGES C)
 
 # Настройка компиляции с использованием c11
 set(CC clang)
+set(CXX clang++)
 set(CMAKE_C_COMPILER clang)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON) # -fPIC
+#set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_C_FLAGS_DEBUG "-g")
 set(CMAKE_C_FLAGS_RELEASE "-O3")
 
@@ -17,6 +19,7 @@ pkg_check_modules(LIBUV REQUIRED IMPORTED_TARGET libuv)
 
 # Добавляем наш исходный файл
 add_library(libserver SHARED library/libserver.c library/libserver.def library/dart/dart_api_dl.c)
+#target_include_directories(libserver PUBLIC library/dart/)
 
 # Линкуем наш исполняемый файл с библиотекой libuv
 target_link_libraries(libserver PRIVATE PkgConfig::LIBUV)
@@ -44,8 +47,9 @@ else()
   )
 endif()
 
-#add_executable(server library/main.c)
-#target_link_libraries(server libserver)
+# Добавляем исполняемый файл
+add_executable(server library/main.c)
+target_link_libraries(server libserver)
 
 # Устанавливаем целевую директорию для компиляции в build/
 set_target_properties(libserver PROPERTIES
@@ -75,6 +79,6 @@ endif()
 
 # Testing:
 #add_executable(test_runner test/test_runner.c test/unity/unity.c)
-#target_link_libraries(test_runner main-lib ${CMAKE_THREAD_LIBS_INIT})
+#target_link_libraries(test_runner libserver ${CMAKE_THREAD_LIBS_INIT})
 #enable_testing()
 #add_test(NAME test_runner COMMAND test_runner)

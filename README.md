@@ -17,10 +17,20 @@ Install dependencies:
 - `gdb`: GNU Debugger.
 - `clang-format`: Tool for automatic code formatting.
 
-
+### Linux
 ```bash
 sudo apt-get update
 sudo apt-get install -y make cmake clang ninja-build llvm libuv1-dev pkg-config gdb clang-format
+```
+
+### Windows
+```bash
+choco install -y make cmake clang ninja llvm mingw libuv pkgconfig
+```
+
+### macOS
+```bash
+brew install make cmake ninja llvm pre-commit clang-format libuv pkg-config
 ```
 
 Setup the [Dart SDK](https://dart.dev/get-dart) path, e.g.:
@@ -40,4 +50,30 @@ Copy the `include` from the Dart SDK to the `library/dart` directory:
 
 ```bash
 cp -r /usr/lib/dart/include library/dart
+```
+
+* If you have a problem with header imports in your IDE, you can try to one-time build with `make`.
+
+## Build
+
+```bash
+make debug
+```
+
+or
+
+```bash
+make release
+```
+
+## Format
+
+```bash
+make format
+```
+
+## Test
+
+```bash
+make test
 ```

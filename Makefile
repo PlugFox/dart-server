@@ -1,6 +1,10 @@
-.PHONY: setup debug release clean
+.PHONY: setup debug release clean format
 
+# Build directory
 BUILD_DIR := build
+
+# Default build
+all: release
 
 # Prepare
 setup:
@@ -24,15 +28,18 @@ release: _prepare-build-dir
 clean:
 	@rm -rf build/
 
+# Run tests
 #test: debug
 #	@echo "Running tests..."
 #	@(cd $(BUILD_DIR) && ctest --verbose)
 
-#format:
-#	@clang-format -i -style=file bin/*.c
-#	@clang-format -i -style=file lib/src/*.c
-#	@clang-format -i -style=file lib/include/*.h
-#	@clang-format -i -style=file test/*.c
+# Format code
+format:
+	@clang-format -i -style=file library/*.c
+	@clang-format -i -style=file library/*.h
+	@dart format -l 80 --fix .
+	@dart fix --apply .
 
+# Prepare build directory
 _prepare-build-dir:
 	@mkdir $(BUILD_DIR) || true

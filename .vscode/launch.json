@@ -5,8 +5,18 @@
             "name": "[C] Debug Server",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/libserver.so",
-            "args": [], // Аргументы командной строки, если они нужны
+            "windows": {
+                "program": "${workspaceFolder}/build/server.exe",
+                "args": []
+            },
+            "linux": {
+                "program": "${workspaceFolder}/build/libserver",
+                "args": []
+            },
+            "osx": {
+                "program": "${workspaceFolder}/build/libserver",
+                "args": []
+            },
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
