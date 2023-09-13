@@ -575,9 +575,15 @@ DART_EXPORT int send_response(int64_t client_ptr, Request *request, const char *
         return -1;
     }
 
-    uv_buf_t buffer = uv_buf_init((char *)response, len);
+    char *copied_response = (char *)malloc(len + 1); // +1 для '\0' в конце
+    if (!copied_response) {
+        fprintf(stderr, "Failed to allocate memory for copied response\n");
+        return -1;
+    }
+    memcpy(copied_response, response, len);
+    copied_response[len] = '\0'; // Добавляем нуль-терминатор для безопасности
 
-    // free_request((Request *) ...); // TODO(plugfox): Освободить память от запроса
+    uv_buf_t buffer = uv_buf_init(copied_response, len);
 
     // Отправка данных
     int status = uv_write((uv_write_t *)malloc(sizeof(uv_write_t)), (uv_stream_t *)client, &buffer, 1, after_write);
