@@ -2,12 +2,13 @@
 #define libserver_h
 
 #include "dart/dart_api_dl.h"
+#include "llhttp/llhttp.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
 
-#define DEFAULT_THREAD_COUNT 4
+#define MAX_BODY_CAPACITY 10240
 
 /**
  * @brief Struct representing the context of a thread.
@@ -22,29 +23,26 @@ typedef struct {
  *
  */
 typedef struct {
-    uv_tcp_t *client; // Client socket
-    void *data;       // Указатель на данные
-    size_t len;       // Data length
-} RequestData;
+    int64_t client_ptr;    // Client pointer
+    const char *method;    // GET, POST и т.д.
+    char *path;            // Путь запроса
+    size_t path_length;    // Длина пути запроса
+    uint8_t version_major; // Версия протокола
+    uint8_t version_minor; // Версия протокола
+    /* Добавь заголовки */
+    size_t content_length; // Общая длина тела из заголовков (если она предоставлена)
+    char *body;            // Буфер для тела
+    size_t body_length; // Текущая длина тела
+} Request;
 
 /**
  * @brief A node in the request queue, containing a pointer to the request data and a pointer to the next node in the
  * queue. Linked List implementation.
  */
 typedef struct RequestQueueNode {
-    RequestData *request;          /**< Pointer to the request data */
+    Request *request;              /**< Pointer to the request data */
     struct RequestQueueNode *next; /**< Pointer to the next node in the queue */
 } RequestQueueNode;
-
-/**
- * @brief Struct representing exported request data for Dart Worker through FFI
- *
- */
-typedef struct {
-    int64_t client_ptr; // Указатель на клиентское соединение
-    char *data;         // Данные запроса
-    size_t len;         // Длина данных
-} ExportedRequestData;
 
 /**
  * Initializes the Dart API with the given data pointer.
@@ -71,7 +69,7 @@ DART_EXPORT void create_server(const char *ip, int16_t port, int16_t backlog, in
  *
  * @return ExportedRequestData* - a pointer to the exported request data struct
  */
-DART_EXPORT ExportedRequestData *get_next_request_data();
+DART_EXPORT Request *get_request();
 
 /**
  * Sends a response to a client over a TCP connection.
@@ -81,7 +79,7 @@ DART_EXPORT ExportedRequestData *get_next_request_data();
  * @param len The length of the response data.
  * @return Returns 0 if the response was sent successfully, or an error code if there was an error.
  */
-DART_EXPORT int send_response_to_client(int64_t client_ptr, const char *response_data, size_t len);
+DART_EXPORT int send_response(int64_t client_ptr, const char *response, size_t len);
 
 /**
  * @brief Get metrics
@@ -103,3 +101,5 @@ DART_EXPORT void metrics();
 DART_EXPORT void close_server();
 
 #endif
+
+// TODO(plugfox): free request

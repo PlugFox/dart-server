@@ -18,12 +18,42 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUV REQUIRED IMPORTED_TARGET libuv)
 find_package(Threads REQUIRED)
 
-# Добавляем наш исходный файл
-add_library(libserver SHARED library/libserver.c library/libserver.def library/dart/dart_api_dl.c)
-target_include_directories(libserver PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/library)
+#include(FetchContent)
+# Set source files
+set(LIBSERVER_SOURCES
+    library/libserver.c
+    library/libserver.def
+    library/dart/dart_api_dl.c
+    library/llhttp/llhttp.c
+    library/llhttp/api.c
+    library/llhttp/http.c
+)
 
-# Линкуем нашу библиотеку с libuv и потоками
+# Set include directories
+set(LIBSERVER_INCLUDE_DIRS
+    ${CMAKE_CURRENT_SOURCE_DIR}/library
+    ${CMAKE_CURRENT_SOURCE_DIR}/library/llhttp
+)
+
+# Add the shared library
+add_library(libserver SHARED ${LIBSERVER_SOURCES})
+
+# Add include directories
+target_include_directories(libserver PUBLIC ${LIBSERVER_INCLUDE_DIRS})
+
+# Link necessary libraries
 target_link_libraries(libserver PRIVATE PkgConfig::LIBUV ${CMAKE_THREAD_LIBS_INIT})
+
+# https://llhttp.org/
+# https://github.com/nodejs/llhttp/tree/main
+#FetchContent_Declare(llhttp URL "https://github.com/nodejs/llhttp/archive/refs/tags/release/v9.1.2.tar.gz")
+#
+#set(BUILD_SHARED_LIBS OFF CACHE INTERNAL "")
+#set(BUILD_STATIC_LIBS ON CACHE INTERNAL "")
+#FetchContent_MakeAvailable(llhttp)
+#
+## Link with the libuv, llhttp_static and pthread targets
+#target_link_libraries(libserver PRIVATE PkgConfig::LIBUV llhttp_static ${CMAKE_THREAD_LIBS_INIT})
 
 target_compile_options(libserver PRIVATE
   -std=c17

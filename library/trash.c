@@ -33,3 +33,23 @@ for (int i = 0; i < ports_length; i++) {
 //
 //     /* free(ptr); */
 // }
+
+// Save the request data
+/* ParsedRequest *request = malloc(sizeof(ParsedRequest));
+if (!request) {
+    fprintf(stderr, "Failed to allocate memory for request data\n");
+    exit(1);
+}
+request->client = (uv_tcp_t *)client;
+request->data = buf->base;
+request->len = nread;
+
+
+// ThreadContext *ctx = server->loop->data;
+
+// This function starts reading data from the client
+// If there's an error, it closes the client connection
+if (uv_read_start((uv_stream_t *)client, alloc_buffer, on_read) != 0) {
+    uv_close((uv_handle_t *)client, close_cb);
+}
+*/

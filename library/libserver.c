@@ -8,6 +8,7 @@
  */
 
 #include "libserver.h"
+#include "llhttp/llhttp.h"
 
 int thread_count;
 uv_barrier_t barrier;
@@ -21,12 +22,15 @@ RequestQueueNode *tail = NULL;
 uv_mutex_t queue_mutex; // Mutex
 uv_cond_t queue_cond;   // Condition variable, used to signal that new data is available in the queue
 
+// HTTP parser
+llhttp_settings_t settings;
+
 /**
  * Adds a new request to the request queue.
  *
  * @param request The request to be added to the queue.
  */
-void enqueue(RequestData *request) {
+void enqueue(Request *request) {
     // Allocate memory for a new request node
     RequestQueueNode *new_request = malloc(sizeof(RequestQueueNode));
     if (!new_request) {
@@ -54,6 +58,26 @@ void enqueue(RequestData *request) {
 }
 
 /**
+ * @brief Callback function to free the memory allocated for a handle when it is closed.
+ *
+ * @param handle The handle to be closed.
+ */
+void on_connection_close(uv_handle_t *handle) {
+    if (!handle) return;
+    llhttp_t *parser = handle->data;
+    free(parser);
+    free(handle);
+}
+
+// TODO(plugfox): Вызывать эту функцию при send_response
+void free_request(Request *request) {
+    if (!request) return;
+    free(request->path);
+    free(request->body);
+    free(request);
+}
+
+/**
  * Dequeues a request from the head of the queue.
  * dequeue(1) to wait for a new request
  * dequeue(0) to simply return NULL if the queue is empty.
@@ -62,7 +86,7 @@ void enqueue(RequestData *request) {
  *                   Pass 1 to wait for a new request or 0 to simply return NULL if the queue is empty.
  * @return The dequeued request or NULL if the queue is empty and waiting is not required.
  */
-RequestData *dequeue(int shouldWait) {
+Request *dequeue(int shouldWait) {
     uv_mutex_lock(&queue_mutex);
 
     while (1) {
@@ -77,7 +101,7 @@ RequestData *dequeue(int shouldWait) {
         }
 
         RequestQueueNode *temp = head;
-        RequestData *request = temp->request;
+        Request *request = temp->request;
 
         head = head->next;
         if (!head) {
@@ -85,25 +109,17 @@ RequestData *dequeue(int shouldWait) {
         }
 
         // Проверяем, закрыто ли соединение
-        if (uv_is_closing((uv_handle_t *)request->client)) {
-            free(request); // Освободим память от этого запроса
-            free(temp);    // Освободим память от узла списка
-            continue;      // Перейдем к следующему элементу в списке
+        // Если соединение закрыто, освобождаем память от запроса и узла списка
+        if (uv_is_closing((uv_handle_t *)request->client_ptr)) {
+            free_request(request); // Освободим память от этого запроса
+            free(temp);            // Освободим память от узла списка
+            continue;              // Перейдем к следующему элементу в списке
         }
 
         uv_mutex_unlock(&queue_mutex);
         free(temp);     // Освободим память от узла списка, но не от запроса
         return request; // Возвращаем действительный запрос
     }
-}
-
-/**
- * @brief Callback function to free the memory allocated for a handle when it is closed.
- *
- * @param handle The handle to be closed.
- */
-void close_cb(uv_handle_t *handle) {
-    free(handle);
 }
 
 /**
@@ -134,7 +150,7 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
     if (nread <= 0) {
         if (nread == UV_EOF) {
             // Клиент закрыл соединение
-            uv_close((uv_handle_t *)client, NULL);
+            uv_close((uv_handle_t *)client, on_connection_close);
         } else {
             fprintf(stderr, "Read error: %s\n", uv_strerror(nread));
         }
@@ -142,16 +158,51 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
         return;
     }
 
-    RequestData *request = malloc(sizeof(RequestData));
+    // Initialize ParsedRequest
+    Request *request = malloc(sizeof(Request));
     if (!request) {
-        fprintf(stderr, "Failed to allocate memory for request data\n");
-        exit(1);
+        fprintf(stderr, "Failed to allocate memory for ParsedRequest\n");
+        free(buf->base);
+        return;
     }
-    request->client = (uv_tcp_t *)client;
-    request->data = buf->base;
-    request->len = nread;
+    request->client_ptr = (int64_t)client;
 
-    enqueue(request);
+    llhttp_t *parser = client->data;
+    if (parser == NULL) {
+        fprintf(stderr, "Failed to get parser\n");
+        free_request(request);
+        free(buf->base);
+        return;
+    }
+    parser->data = request;
+
+    llhttp_errno_t err = llhttp_execute(parser, buf->base, nread);
+    if (err != HPE_OK) {
+        fprintf(stderr, "HTTP parsing error: %s\n", llhttp_errno_name(err));
+        free_request(request);
+        free(buf->base);
+        uv_close((uv_handle_t *)client, on_connection_close); // Close connection and free parser
+        return;
+    }
+
+    // Check if the required fields are present and valid
+    if (request && request->path && request->method) {
+        if (request->body_length != request->content_length) {
+            fprintf(stderr, "Body length does not match content length\n");
+            request->body_length = 0;
+            request->content_length = 0;
+            free(request->body);
+        }
+        enqueue(request);
+    } else {
+        // Handle invalid request (maybe close the connection or send an error response)
+        free_request(request);
+        // Close connection if the request is not valid
+        uv_close((uv_handle_t *)client, on_connection_close);
+    }
+
+    // Освобождаем буфер после того, как обработали его содержимое
+    free(buf->base);
 }
 
 /**
@@ -169,22 +220,121 @@ void on_new_connection(uv_stream_t *server, int status) {
     }
 
     uv_tcp_t *client = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
-
-    // Здесь мы явно указываем, что новый клиентский сокет
-    // должен использовать тот же цикл событий, что и сервер.
-    uv_tcp_init(server->loop, client);
-    if (uv_accept(server, (uv_stream_t *)client) != 0) {
-        uv_close((uv_handle_t *)client, close_cb);
+    if (!client) {
+        fprintf(stderr, "Failed to allocate memory for client\n");
         return;
     }
 
-    // ThreadContext *ctx = server->loop->data;
-
-    // This function starts reading data from the client
-    // If there's an error, it closes the client connection
-    if (uv_read_start((uv_stream_t *)client, alloc_buffer, on_read) != 0) {
-        uv_close((uv_handle_t *)client, close_cb);
+    uv_tcp_init(server->loop, client);
+    if (uv_accept(server, (uv_stream_t *)client) != 0) {
+        uv_close((uv_handle_t *)client, on_connection_close);
+        return;
     }
+
+    // Initialize HTTP parser
+    llhttp_t *parser = malloc(sizeof(llhttp_t));
+    if (!parser) {
+        fprintf(stderr, "Failed to allocate memory for llhttp parser\n");
+        uv_close((uv_handle_t *)client, on_connection_close);
+        return;
+    }
+
+    llhttp_init(parser, HTTP_REQUEST, &settings);
+    client->data = parser;
+
+    // Start reading from the client
+    if (uv_read_start((uv_stream_t *)client, alloc_buffer, on_read) != 0) {
+        uv_close((uv_handle_t *)client, on_connection_close);
+    }
+}
+
+int on_method(llhttp_t *parser, const char *at, size_t length) {
+    Request *request = (Request *)parser->data;
+    if (!request) return -1;
+    request->method = llhttp_method_name(parser->method);
+    return 0;
+}
+
+int on_url(llhttp_t *parser, const char *at, size_t length) {
+    Request *request = (Request *)parser->data;
+    if (!request) return -1;
+    request->path = strndup(at, length);
+    request->path_length = length;
+    if (!request->path) {
+        fprintf(stderr, "Failed to allocate memory for path\n");
+        return -1;
+    }
+    return 0;
+}
+
+int on_version_complete(llhttp_t *parser) {
+    Request *request = (Request *)parser->data;
+    if (!request) return -1;
+    request->version_major = parser->http_major;
+    request->version_minor = parser->http_minor;
+    return 0;
+}
+
+int on_header_field(llhttp_t *parser, const char *at, size_t length) {
+    // TODO: Добавьте обработку полей заголовков (если необходимо)
+    return 0;
+}
+
+int on_header_value(llhttp_t *parser, const char *at, size_t length) {
+    // TODO: Добавьте обработку значений заголовков (если необходимо)
+    return 0;
+}
+
+int on_headers_complete(llhttp_t *parser) {
+    Request *request = (Request *)parser->data;
+    if (!request) return -1;
+    // Устанавливаем общую длину тела из заголовков (если она предоставлена)
+    request->content_length = parser->content_length;
+    request->body_length = 0;
+    return 0;
+}
+
+int on_body(llhttp_t *parser, const char *at, size_t length) {
+    Request *request = (Request *)parser->data;
+    if (!request) return -1;
+
+    // Если заголовок Content-Length не предоставлен, не обрабатываем тело
+    if (request->content_length < 1) return -1;
+
+    // Убедитесь, что у вас достаточно места для новых данных.
+    if (request->content_length > MAX_BODY_CAPACITY || request->body_length + length > request->content_length) {
+        fprintf(stderr, "Body is too large\n");
+        return -1;
+    }
+
+    // Если это первый блок тела, инициализируем буфер
+    if (!request->body) {
+        request->body = malloc(request->content_length);
+        if (!request->body) {
+            fprintf(stderr, "Failed to allocate memory for body\n");
+            return -1;
+        }
+        request->body_length = 0;
+    }
+
+    // Копируем данные из `at` в наш буфер тела.
+    memcpy(request->body + request->body_length, at, length);
+    request->body_length += length;
+
+    return 0;
+}
+
+// Setups callbacks for llhttp_settings
+void setup_parser_settings() {
+    llhttp_settings_init(&settings);
+    settings.on_method = on_method;
+    settings.on_url = on_url;
+    settings.on_version_complete = on_version_complete;
+    settings.on_header_field = on_header_field;
+    settings.on_header_value = on_header_value;
+    settings.on_headers_complete = on_headers_complete;
+    settings.on_body = on_body;
+    // settings.on_message_complete = on_message_complete;
 }
 
 /**
@@ -290,7 +440,7 @@ DART_EXPORT void create_server(const char *ip, int16_t port, int16_t backlog, in
 
     // If workers is less than 1, use the default thread count.
     if (workers < 1) {
-        workers = DEFAULT_THREAD_COUNT;
+        workers = 2;
     }
     thread_count = workers;
 
@@ -298,12 +448,17 @@ DART_EXPORT void create_server(const char *ip, int16_t port, int16_t backlog, in
     loops = (uv_loop_t **)malloc(sizeof(uv_loop_t *) * thread_count);
     servers = (uv_tcp_t *)malloc(sizeof(uv_tcp_t) * thread_count);
 
+    // Initialize HTTP parser
+    setup_parser_settings();
+
+    // Start threads
     start_threads(addr, backlog);
 
     // Emulate some work
     // while (1) {
     //    uv_sleep(1000);
     // }
+    // exit(0);
 }
 
 /**
@@ -325,18 +480,15 @@ void clear_all_requests() {
 
     while (head) {
         RequestQueueNode *temp = head;
-        RequestData *request = temp->request;
+        Request *request = temp->request;
 
         // Закрываем соединение, если оно еще открыто
-        if (!uv_is_closing((uv_handle_t *)request->client)) {
-            uv_close((uv_handle_t *)request->client, NULL);
+        if (!uv_is_closing((uv_handle_t *)request->client_ptr)) {
+            uv_close((uv_handle_t *)request->client_ptr, on_connection_close);
         }
 
         // Освобождаем память запроса
-        if (request->data) {
-            free(request->data);
-        }
-        free(request);
+        free_request(request);
 
         head = head->next;
         free(temp);
@@ -353,34 +505,8 @@ void clear_all_requests() {
  *
  * @return ExportedRequestData* - a pointer to the exported request data struct
  */
-DART_EXPORT ExportedRequestData *get_next_request_data() {
-    RequestData *request = dequeue(0);
-    if (request) {
-        ExportedRequestData *exported_data = malloc(sizeof(ExportedRequestData));
-        if (!exported_data) {
-            fprintf(stderr, "Failed to allocate memory for exported request data\n");
-            exit(1);
-        }
-        exported_data->client_ptr = (int64_t)request->client;
-        exported_data->data = request->data;
-        exported_data->len = request->len;
-
-        free(request); // Освобождаем структуру после извлечения данных
-        return exported_data;
-    }
-    return NULL; // Возвращаем NULL, если очередь пуста
-}
-
-/**
- * Frees the memory allocated for an ExportedRequestData struct.
- *
- * @param exported_data The ExportedRequestData struct to free.
- */
-void free_exported_request_data(ExportedRequestData *exported_data) {
-    if (exported_data) {
-        free(exported_data->data);
-        free(exported_data);
-    }
+DART_EXPORT Request *get_request() {
+    return dequeue(0);
 }
 
 /**
@@ -391,6 +517,7 @@ void free_exported_request_data(ExportedRequestData *exported_data) {
  * @param status The status of the write operation.
  */
 void after_write(uv_write_t *req, int status) {
+    fprintf(stderr, "after_write\n");
     if (status) {
         fprintf(stderr, "uv_write error: %s\n", uv_strerror(status));
     }
@@ -405,15 +532,25 @@ void after_write(uv_write_t *req, int status) {
  * @param len The length of the response data.
  * @return Returns 0 if the response was sent successfully, or an error code if there was an error.
  */
-DART_EXPORT int send_response_to_client(int64_t client_ptr, const char *response_data, size_t len) {
+DART_EXPORT int send_response(int64_t client_ptr, const char *response, size_t len) {
     uv_tcp_t *client = (uv_tcp_t *)client_ptr;
 
-    uv_buf_t buffer = uv_buf_init((char *)response_data, len);
+    if (!client) {
+        fprintf(stderr, "Client is NULL\n");
+        return -1;
+    }
+
+    if (uv_is_closing((uv_handle_t *)client)) {
+        fprintf(stderr, "Client connection is closed\n");
+        return -1;
+    }
+
+    uv_buf_t buffer = uv_buf_init((char *)response, len);
 
     // Отправка данных
     int status = uv_write((uv_write_t *)malloc(sizeof(uv_write_t)), (uv_stream_t *)client, &buffer, 1, after_write);
 
-    return status; // Возвращает 0 при успешной отправке или код ошибки
+    return status; // Returns 0 on success or an error code
 }
 
 /**
