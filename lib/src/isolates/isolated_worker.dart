@@ -20,10 +20,10 @@ typedef IsolatedWorkerArguments = ({
 typedef GetRequestC = Pointer<NativeRequest> Function();
 typedef GetRequestDart = Pointer<NativeRequest> Function();
 
-typedef SendResponseC = Int32 Function(
-    Int64 client, Pointer<Utf8> responseData, Uint64 len);
-typedef SendResponseDart = int Function(
-    int client, Pointer<Utf8> responseData, int len);
+typedef SendResponseC = Int32 Function(Int64 client,
+    Pointer<NativeRequest> request, Pointer<Utf8> response, Uint64 len);
+typedef SendResponseDart = int Function(int client,
+    Pointer<NativeRequest> request, Pointer<Utf8> responseData, int len);
 
 @internal
 final class NativeRequest extends Struct {
@@ -106,19 +106,24 @@ void isolatedWorker(IsolatedWorkerArguments args) => runZonedGuarded<void>(
                 contentLength: contentLength,
                 body: body,
               );
+              print('<Worker#${args.index}> '
+                  'Received request from client '
+                  '[${request.method}]'
+                  '${request.url}');
               final result = await args.handler(request);
 
               // Вызов функции `send_response_to_client` (например, после обработки данных)
               final responseBody = "<Worker#${args.index}>\n${result}";
-              final responseData =
+              final response =
                   "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
                           "${responseBody.length}\r\n\r\n${responseBody}"
                       .toNativeUtf8();
               if (send) return;
               sendResponseToClient(
                 clientPtr,
-                responseData,
-                responseData.length,
+                requestPtr,
+                response,
+                response.length,
               );
               send = true;
             },
@@ -128,14 +133,15 @@ void isolatedWorker(IsolatedWorkerArguments args) => runZonedGuarded<void>(
               io.stderr.writeln(message);
               if (send) return;
               send = true;
-              final responseData =
+              final response =
                   "HTTP/1.1 500 OK\r\nContent-Type: text/plain\r\nContent-Length: "
                           "0\r\n\r\n"
                       .toNativeUtf8();
               sendResponseToClient(
                 clientPtr,
-                responseData,
-                responseData.length,
+                requestPtr,
+                response,
+                response.length,
               );
             },
           );

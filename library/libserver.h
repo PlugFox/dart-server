@@ -79,7 +79,7 @@ DART_EXPORT Request *get_request();
  * @param len The length of the response data.
  * @return Returns 0 if the response was sent successfully, or an error code if there was an error.
  */
-DART_EXPORT int send_response(int64_t client_ptr, const char *response, size_t len);
+DART_EXPORT int send_response(int64_t client_ptr, Request *request, const char *response, size_t len);
 
 /**
  * @brief Get metrics

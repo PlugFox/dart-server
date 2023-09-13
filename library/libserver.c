@@ -300,7 +300,7 @@ int on_body(llhttp_t *parser, const char *at, size_t length) {
     // Если заголовок Content-Length не предоставлен, не обрабатываем тело
     if (request->content_length < 1) {
         fprintf(stderr, "Content-Length is not provided\n");
-        return -1;
+        return 0;
     }
 
     // Убедитесь, что у вас достаточно места для новых данных.
@@ -556,8 +556,14 @@ void after_write(uv_write_t *req, int status) {
  * @param len The length of the response data.
  * @return Returns 0 if the response was sent successfully, or an error code if there was an error.
  */
-DART_EXPORT int send_response(int64_t client_ptr, const char *response, size_t len) {
+DART_EXPORT int send_response(int64_t client_ptr, Request *request, const char *response, size_t len) {
     uv_tcp_t *client = (uv_tcp_t *)client_ptr;
+
+    if (!request) {
+        fprintf(stderr, "Request is NULL\n");
+    } else {
+        free_request(request);
+    }
 
     if (!client) {
         fprintf(stderr, "Client is NULL\n");
