@@ -9,6 +9,8 @@
 
 #include "libserver.h"
 #include "llhttp/llhttp.h"
+#include <stdio.h>
+#include <uv.h>
 
 int thread_count;
 uv_barrier_t barrier;
@@ -115,9 +117,10 @@ Request *dequeue(int shouldWait) {
             free(temp);            // Освободим память от узла списка
             continue;              // Перейдем к следующему элементу в списке
         }
+        free(temp); // Освободим память от узла списка, но не от запроса
 
         uv_mutex_unlock(&queue_mutex);
-        free(temp);     // Освободим память от узла списка, но не от запроса
+
         return request; // Возвращаем действительный запрос
     }
 }
@@ -158,7 +161,7 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
         return;
     }
 
-    // Initialize ParsedRequest
+    // Initialize Request
     Request *request = malloc(sizeof(Request));
     if (!request) {
         fprintf(stderr, "Failed to allocate memory for ParsedRequest\n");
@@ -166,6 +169,14 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
         return;
     }
     request->client_ptr = (int64_t)client;
+    request->method = NULL;
+    request->path = NULL;
+    request->path_length = 0;
+    request->version_major = 0;
+    request->version_minor = 0;
+    request->content_length = 0;
+    request->body = NULL;
+    request->body_length = 0;
 
     llhttp_t *parser = client->data;
     if (parser == NULL) {
@@ -183,22 +194,6 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
         free(buf->base);
         uv_close((uv_handle_t *)client, on_connection_close); // Close connection and free parser
         return;
-    }
-
-    // Check if the required fields are present and valid
-    if (request && request->path && request->method) {
-        if (request->body_length != request->content_length) {
-            fprintf(stderr, "Body length does not match content length\n");
-            request->body_length = 0;
-            request->content_length = 0;
-            free(request->body);
-        }
-        enqueue(request);
-    } else {
-        // Handle invalid request (maybe close the connection or send an error response)
-        free_request(request);
-        // Close connection if the request is not valid
-        uv_close((uv_handle_t *)client, on_connection_close);
     }
 
     // Освобождаем буфер после того, как обработали его содержимое
@@ -290,16 +285,23 @@ int on_headers_complete(llhttp_t *parser) {
     if (!request) return -1;
     // Устанавливаем общую длину тела из заголовков (если она предоставлена)
     request->content_length = parser->content_length;
-    request->body_length = 0;
     return 0;
 }
 
 int on_body(llhttp_t *parser, const char *at, size_t length) {
+    if (!at || length == 0) {
+        fprintf(stderr, "Invalid input to on_body\n");
+        return -1;
+    }
+
     Request *request = (Request *)parser->data;
     if (!request) return -1;
 
     // Если заголовок Content-Length не предоставлен, не обрабатываем тело
-    if (request->content_length < 1) return -1;
+    if (request->content_length < 1) {
+        fprintf(stderr, "Content-Length is not provided\n");
+        return -1;
+    }
 
     // Убедитесь, что у вас достаточно места для новых данных.
     if (request->content_length > MAX_BODY_CAPACITY || request->body_length + length > request->content_length) {
@@ -310,16 +312,39 @@ int on_body(llhttp_t *parser, const char *at, size_t length) {
     // Если это первый блок тела, инициализируем буфер
     if (!request->body) {
         request->body = malloc(request->content_length);
-        if (!request->body) {
-            fprintf(stderr, "Failed to allocate memory for body\n");
-            return -1;
-        }
         request->body_length = 0;
     }
 
+    if (!request->body) {
+        fprintf(stderr, "request->body is NULL before memcpy\n");
+        return -1;
+    }
     // Копируем данные из `at` в наш буфер тела.
     memcpy(request->body + request->body_length, at, length);
     request->body_length += length;
+
+    return 0;
+}
+
+int on_message_complete(llhttp_t *parser) {
+    Request *request = (Request *)parser->data;
+    if (!request) return -1;
+
+    // Check if the required fields are present and valid
+    if (request && request->path && request->method) {
+        if (request->body_length != request->content_length) {
+            fprintf(stderr, "Body length does not match content length\n");
+            request->body_length = 0;
+            request->content_length = 0;
+            free(request->body);
+        }
+        enqueue(request);
+    } else {
+        // Handle invalid request (maybe close the connection or send an error response)
+        free_request(request);
+        // Close connection if the request is not valid
+        uv_close((uv_handle_t *)request->client_ptr, on_connection_close);
+    }
 
     return 0;
 }
@@ -334,7 +359,7 @@ void setup_parser_settings() {
     settings.on_header_value = on_header_value;
     settings.on_headers_complete = on_headers_complete;
     settings.on_body = on_body;
-    // settings.on_message_complete = on_message_complete;
+    settings.on_message_complete = on_message_complete;
 }
 
 /**
@@ -545,6 +570,8 @@ DART_EXPORT int send_response(int64_t client_ptr, const char *response, size_t l
     }
 
     uv_buf_t buffer = uv_buf_init((char *)response, len);
+
+    // free_request((Request *) ...); // TODO(plugfox): Освободить память от запроса
 
     // Отправка данных
     int status = uv_write((uv_write_t *)malloc(sizeof(uv_write_t)), (uv_stream_t *)client, &buffer, 1, after_write);

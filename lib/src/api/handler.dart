@@ -1,3 +1,5 @@
 import 'dart:async';
 
-typedef FutureOr<Object> Handler(Object request);
+import 'package:uv/src/api/request.dart';
+
+typedef FutureOr<String> Handler(Request request);

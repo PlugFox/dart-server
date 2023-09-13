@@ -6,7 +6,6 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:meta/meta.dart';
-import 'package:stack_trace/stack_trace.dart' as st;
 import 'package:uv/src/api/handler.dart';
 import 'package:uv/src/api/request.dart';
 import 'package:uv/src/util/shared_dylib.dart';
@@ -44,12 +43,12 @@ final class NativeRequest extends Struct {
   @Uint8()
   external int version_minor; // Версия протокола
 
-  @Uint8()
+  @Uint64()
   external int content_length; // Длина тела запроса
 
   // Добавь заголовки, если они будут добавлены в будущем
 
-  external Pointer<Void> body; // Указатель на начало тела запроса
+  external Pointer<Uint8> body; // Указатель на начало тела запроса
 }
 
 /// Isolated worker function.
@@ -76,7 +75,13 @@ void isolatedWorker(IsolatedWorkerArguments args) => runZonedGuarded<void>(
           // Вызов функции `get_next_request_data`
           final requestPtr = getNextRequestData();
           if (requestPtr == nullptr) return;
-          /* final requestData =
+          var send = false;
+          final ref = requestPtr.ref;
+          final clientPtr = ref.client_ptr;
+          final contentLength = ref.content_length;
+          runZonedGuarded<void>(
+            () async {
+              /* final requestData =
               request.ref.data.toDartString(length: request.ref.len);
           print('Received data from client:\n'
               '---------------------------\n'
@@ -84,42 +89,55 @@ void isolatedWorker(IsolatedWorkerArguments args) => runZonedGuarded<void>(
               '\n'
               '---------------------------\n');
            */
-          final ref = requestPtr.ref;
-          final clientPtr = ref.client_ptr;
-          final contentLength = ref.content_length;
+              final Uint8List body;
+              if (contentLength != 0 && ref.body != nullptr) {
+                body = Uint8List.fromList(ref.body.asTypedList(contentLength));
+              } else {
+                body = Uint8List(0);
+              }
+              final request = Request(
+                method: ref.method.toDartString(),
+                url: ref.path.toDartString(length: ref.path_length),
+                version: (
+                  major: ref.version_major,
+                  minor: ref.version_minor,
+                ),
+                headers: <String, String>{},
+                contentLength: contentLength,
+                body: body,
+              );
+              final result = await args.handler(request);
 
-          final Uint8List body;
-          /* if (contentLength != 0 && ref.body != nullptr) {
-            Pointer<Uint8> bodyPtr = ref.body.cast<Uint8>();
-            body =
-                UnmodifiableUint8ListView(bodyPtr.asTypedList(contentLength));
-          } else {
-            body = UnmodifiableUint8ListView(Uint8List(0));
-          } */
-          body = UnmodifiableUint8ListView(Uint8List(0));
-          final request = Request(
-            method: ref.method.toDartString(),
-            url: ref.path.toDartString(length: ref.path_length),
-            version: (
-              major: ref.version_major,
-              minor: ref.version_minor,
-            ),
-            headers: <String, String>{},
-            contentLength: contentLength,
-            body: body,
-          );
-          final result = await args.handler(request);
-
-          // Вызов функции `send_response_to_client` (например, после обработки данных)
-          final responseBody = "<Worker#${args.index}>\n${result}";
-          final responseData =
-              "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
-                      "${responseBody.length}\r\n\r\n${responseBody}"
-                  .toNativeUtf8();
-          sendResponseToClient(
-            clientPtr,
-            responseData,
-            responseData.length,
+              // Вызов функции `send_response_to_client` (например, после обработки данных)
+              final responseBody = "<Worker#${args.index}>\n${result}";
+              final responseData =
+                  "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
+                          "${responseBody.length}\r\n\r\n${responseBody}"
+                      .toNativeUtf8();
+              if (send) return;
+              sendResponseToClient(
+                clientPtr,
+                responseData,
+                responseData.length,
+              );
+              send = true;
+            },
+            (error, stackTrace) {
+              final message = 'Worker exception:\n$error\n$stackTrace';
+              print(message);
+              io.stderr.writeln(message);
+              if (send) return;
+              send = true;
+              final responseData =
+                  "HTTP/1.1 500 OK\r\nContent-Type: text/plain\r\nContent-Length: "
+                          "0\r\n\r\n"
+                      .toNativeUtf8();
+              sendResponseToClient(
+                clientPtr,
+                responseData,
+                responseData.length,
+              );
+            },
           );
         });
 
@@ -135,11 +153,9 @@ void isolatedWorker(IsolatedWorkerArguments args) => runZonedGuarded<void>(
         nativeWorker(args.index, workerOnRequestPointer, sendPort.nativePort); */
       },
       (error, stackTrace) {
-        print('Fatal error in isolated worker!');
-        io.stderr
-          ..writeln('Fatal error in isolated worker!')
-          ..writeln(error)
-          ..writeln(st.Trace.format(stackTrace));
+        final message = 'Fatal error in isolated worker:\n$error\n$stackTrace';
+        print(message);
+        io.stderr.writeln(message);
         io.exit(1);
       },
     );
