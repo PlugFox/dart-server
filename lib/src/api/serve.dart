@@ -45,8 +45,6 @@ Future<void> serve(
   );
   final serverSendPort = await completer.future;
 
-  await Future.delayed(Duration(seconds: 1));
-
   // Spawn worker isolates.
   final workerIsolates = <({
     Isolate isolate,

@@ -21,16 +21,24 @@ RequestQueueNode *tail = NULL;
 uv_mutex_t queue_mutex; // Mutex
 uv_cond_t queue_cond;   // Condition variable, used to signal that new data is available in the queue
 
-// Enqueue request
+/**
+ * Adds a new request to the request queue.
+ *
+ * @param request The request to be added to the queue.
+ */
 void enqueue(RequestData *request) {
+    // Allocate memory for a new request node
     RequestQueueNode *new_request = malloc(sizeof(RequestQueueNode));
     if (!new_request) {
         fprintf(stderr, "Failed to allocate memory for new request\n");
         exit(1);
     }
+
+    // Initialize the new request node
     new_request->request = request;
     new_request->next = NULL;
 
+    // Lock the queue mutex and add the new request to the queue
     uv_mutex_lock(&queue_mutex);
     if (!head) {
         head = new_request;
@@ -39,14 +47,21 @@ void enqueue(RequestData *request) {
         tail->next = new_request;
         tail = new_request;
     }
-    uv_cond_signal(&queue_cond); // Уведомляем об новом запросе
+
+    // Signal the queue condition variable to notify waiting threads of the new request
+    uv_cond_signal(&queue_cond);
     uv_mutex_unlock(&queue_mutex);
 }
 
-// Dequeue request
-// shouldWait определяет, следует ли ждать новый запрос, если очередь пуста
-// dequeue(1) для ожидания нового запроса
-// или dequeue(0), чтобы просто вернуть NULL, если очередь пуста.
+/**
+ * Dequeues a request from the head of the queue.
+ * dequeue(1) to wait for a new request
+ * dequeue(0) to simply return NULL if the queue is empty.
+ *
+ * @param shouldWait Determines whether to wait for a new request if the queue is empty.
+ *                   Pass 1 to wait for a new request or 0 to simply return NULL if the queue is empty.
+ * @return The dequeued request or NULL if the queue is empty and waiting is not required.
+ */
 RequestData *dequeue(int shouldWait) {
     uv_mutex_lock(&queue_mutex);
 
@@ -82,12 +97,22 @@ RequestData *dequeue(int shouldWait) {
     }
 }
 
-// Close handle
+/**
+ * @brief Callback function to free the memory allocated for a handle when it is closed.
+ *
+ * @param handle The handle to be closed.
+ */
 void close_cb(uv_handle_t *handle) {
     free(handle);
 }
 
-// Allocate buffer
+/**
+ * @brief Allocates memory for a buffer to be used for reading data from a handle.
+ *
+ * @param handle The handle to read data from.
+ * @param suggested_size The suggested size of the buffer to allocate.
+ * @param buf The buffer to allocate memory for.
+ */
 void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
     /* buf->base = (char *)malloc(suggested_size);
     buf->len = suggested_size;
@@ -127,13 +152,6 @@ void on_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
     request->len = nread;
 
     enqueue(request);
-
-    /* uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
-    char http_response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "
-                           "12\r\n\r\nHello, world!";
-    uv_buf_t wrbuf = uv_buf_init(http_response, strlen(http_response));
-    uv_write(req, client, &wrbuf, 1, echo_write);
-    free(buf->base); */
 }
 
 /**
@@ -246,8 +264,18 @@ DART_EXPORT intptr_t init_dart_api(void *data) {
     return Dart_InitializeApiDL(data);
 }
 
-// Create server
+/**
+ * @brief Creates and starts a server with the given IP address, port, backlog, number of workers, and send port.
+ *
+ * @param ip The IP address to bind the server to.
+ * @param port The port number to bind the server to.
+ * @param backlog The maximum number of pending connections to queue up.
+ * @param workers The number of worker threads to use for handling incoming connections.
+ * @param send_port Dart SendPort for sending data to the Dart side.
+ */
 DART_EXPORT void create_server(const char *ip, int16_t port, int16_t backlog, int16_t workers, int64_t send_port) {
+    // fprintf(stderr, "Create and start server\n");
+
     // Инициализация мьютекса и условной переменной
     uv_mutex_init(&queue_mutex);
     uv_cond_init(&queue_cond);
@@ -270,11 +298,7 @@ DART_EXPORT void create_server(const char *ip, int16_t port, int16_t backlog, in
     loops = (uv_loop_t **)malloc(sizeof(uv_loop_t *) * thread_count);
     servers = (uv_tcp_t *)malloc(sizeof(uv_tcp_t) * thread_count);
 
-    // fprintf(stderr, "Start threads\n");
-
     start_threads(addr, backlog);
-
-    // fprintf(stderr, "Started\n");
 
     // Emulate some work
     // while (1) {
@@ -282,7 +306,20 @@ DART_EXPORT void create_server(const char *ip, int16_t port, int16_t backlog, in
     // }
 }
 
-// Clears all requests from the queue.
+/**
+ * @brief Clears all requests from the request queue and frees the associated memory.
+ *
+ * This function locks the queue_mutex and iterates through the request queue, closing any open connections
+ * and freeing the memory associated with each request. Once all requests have been cleared, the tail of the
+ * queue is set to NULL.
+ *
+ * @param None
+ * @return None
+ *
+ * @note This function assumes that the queue_mutex has already been initialized.
+ * @note This function should be called when the server is shutting down to ensure that all requests are cleared
+ * and no memory leaks occur.
+ */
 void clear_all_requests() {
     uv_mutex_lock(&queue_mutex);
 
@@ -310,7 +347,94 @@ void clear_all_requests() {
     uv_mutex_unlock(&queue_mutex);
 }
 
-// Wait for all threads to complete and close the server.
+/**
+ * Dequeues the next request data from the queue and returns it as an ExportedRequestData struct.
+ * If the queue is empty, returns NULL.
+ *
+ * @return ExportedRequestData* - a pointer to the exported request data struct
+ */
+DART_EXPORT ExportedRequestData *get_next_request_data() {
+    RequestData *request = dequeue(0);
+    if (request) {
+        ExportedRequestData *exported_data = malloc(sizeof(ExportedRequestData));
+        if (!exported_data) {
+            fprintf(stderr, "Failed to allocate memory for exported request data\n");
+            exit(1);
+        }
+        exported_data->client_ptr = (int64_t)request->client;
+        exported_data->data = request->data;
+        exported_data->len = request->len;
+
+        free(request); // Освобождаем структуру после извлечения данных
+        return exported_data;
+    }
+    return NULL; // Возвращаем NULL, если очередь пуста
+}
+
+/**
+ * Frees the memory allocated for an ExportedRequestData struct.
+ *
+ * @param exported_data The ExportedRequestData struct to free.
+ */
+void free_exported_request_data(ExportedRequestData *exported_data) {
+    if (exported_data) {
+        free(exported_data->data);
+        free(exported_data);
+    }
+}
+
+/**
+ * Callback function called after a write operation is completed.
+ * Frees the memory allocated for the write request and prints an error message if the status is not successful.
+ *
+ * @param req The write request.
+ * @param status The status of the write operation.
+ */
+void after_write(uv_write_t *req, int status) {
+    if (status) {
+        fprintf(stderr, "uv_write error: %s\n", uv_strerror(status));
+    }
+    free(req);
+}
+
+/**
+ * Sends a response to a client over a TCP connection.
+ *
+ * @param client_ptr A pointer to the client's TCP connection.
+ * @param response_data The data to be sent as a response.
+ * @param len The length of the response data.
+ * @return Returns 0 if the response was sent successfully, or an error code if there was an error.
+ */
+DART_EXPORT int send_response_to_client(int64_t client_ptr, const char *response_data, size_t len) {
+    uv_tcp_t *client = (uv_tcp_t *)client_ptr;
+
+    uv_buf_t buffer = uv_buf_init((char *)response_data, len);
+
+    // Отправка данных
+    int status = uv_write((uv_write_t *)malloc(sizeof(uv_write_t)), (uv_stream_t *)client, &buffer, 1, after_write);
+
+    return status; // Возвращает 0 при успешной отправке или код ошибки
+}
+
+/**
+ * @brief Get metrics
+ *
+ */
+DART_EXPORT void metrics() {
+    printf("Metrics\n");
+}
+
+/**
+ * Closes the server by closing all the loops and freeing the memory allocated for them.
+ * Also clears all requests from the queue and destroys the queue mutex and condition variable.
+ * @param None
+ * @return None
+ * @note This function should be called only after all the requests have been processed and the server is no longer
+ * needed.
+ * @note This function should not be called from any of the worker threads.
+ * @note This function is exported to Dart.
+ * @see clear_all_requests(), uv_mutex_destroy(), uv_cond_destroy(), uv_barrier_destroy(), uv_loop_close(), free()
+ */
 DART_EXPORT void close_server() {
     for (int i = 0; i < thread_count; i++) {
         uv_loop_close(loops[i]);
@@ -332,55 +456,4 @@ DART_EXPORT void close_server() {
 
     uv_mutex_destroy(&queue_mutex);
     uv_cond_destroy(&queue_cond);
-}
-
-// Функция для извлечения данных запроса
-DART_EXPORT ExportedRequestData *get_next_request_data() {
-    RequestData *request = dequeue(0);
-    if (request) {
-        ExportedRequestData *exported_data = malloc(sizeof(ExportedRequestData));
-        if (!exported_data) {
-            fprintf(stderr, "Failed to allocate memory for exported request data\n");
-            exit(1);
-        }
-        exported_data->client_ptr = (int64_t)request->client;
-        exported_data->data = request->data;
-        exported_data->len = request->len;
-
-        free(request); // Освобождаем структуру после извлечения данных
-        return exported_data;
-    }
-    return NULL; // Возвращаем NULL, если очередь пуста
-}
-
-// Освобождаем память для экспортируемых данных после их обработки
-void free_exported_request_data(ExportedRequestData *exported_data) {
-    if (exported_data) {
-        free(exported_data->data);
-        free(exported_data);
-    }
-}
-
-// Callback после записи данных
-void after_write(uv_write_t *req, int status) {
-    if (status) {
-        fprintf(stderr, "uv_write error: %s\n", uv_strerror(status));
-    }
-    free(req);
-}
-
-// Функция для отправки ответа обратно клиенту
-DART_EXPORT int send_response_to_client(int64_t client_ptr, const char *response_data, size_t len) {
-    uv_tcp_t *client = (uv_tcp_t *)client_ptr;
-
-    uv_buf_t buffer = uv_buf_init((char *)response_data, len);
-
-    // Отправка данных
-    int status = uv_write((uv_write_t *)malloc(sizeof(uv_write_t)), (uv_stream_t *)client, &buffer, 1, after_write);
-
-    return status; // Возвращает 0 при успешной отправке или код ошибки
-}
-
-DART_EXPORT void metrics() {
-    printf("Metrics\n");
 }

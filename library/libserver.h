@@ -9,25 +9,37 @@
 
 #define DEFAULT_THREAD_COUNT 4
 
-// Thread context
+/**
+ * @brief Struct representing the context of a thread.
+ *
+ */
 typedef struct {
-    int16_t index;
+    int16_t index; /**< Index of the thread. */
 } ThreadContext;
 
-// Request data structure for the queue
+/**
+ * @brief Struct representing a request data object.
+ *
+ */
 typedef struct {
     uv_tcp_t *client; // Client socket
     void *data;       // Указатель на данные
     size_t len;       // Data length
 } RequestData;
 
-// Request queue node (linked list)
+/**
+ * @brief A node in the request queue, containing a pointer to the request data and a pointer to the next node in the
+ * queue. Linked List implementation.
+ */
 typedef struct RequestQueueNode {
-    RequestData *request;
-    struct RequestQueueNode *next;
+    RequestData *request;          /**< Pointer to the request data */
+    struct RequestQueueNode *next; /**< Pointer to the next node in the queue */
 } RequestQueueNode;
 
-// Exported request data structure for Dart Worker through FFI
+/**
+ * @brief Struct representing exported request data for Dart Worker through FFI
+ *
+ */
 typedef struct {
     int64_t client_ptr; // Указатель на клиентское соединение
     char *data;         // Данные запроса
@@ -42,19 +54,52 @@ typedef struct {
  */
 DART_EXPORT intptr_t init_dart_api(void *data);
 
-// Создание сервера
+/**
+ * @brief Creates and starts a server with the given IP address, port, backlog, number of workers, and send port.
+ *
+ * @param ip The IP address to bind the server to.
+ * @param port The port number to bind the server to.
+ * @param backlog The maximum number of pending connections to queue up.
+ * @param workers The number of worker threads to use for handling incoming connections.
+ * @param send_port Dart SendPort for sending data to the Dart side.
+ */
 DART_EXPORT void create_server(const char *ip, int16_t port, int16_t backlog, int16_t workers, int64_t send_port);
 
-// Получение следующего запроса на обработку из очереди или NULL
+/**
+ * Dequeues the next request data from the queue and returns it as an ExportedRequestData struct.
+ * If the queue is empty, returns NULL.
+ *
+ * @return ExportedRequestData* - a pointer to the exported request data struct
+ */
 DART_EXPORT ExportedRequestData *get_next_request_data();
 
-// Отправка ответа клиенту
+/**
+ * Sends a response to a client over a TCP connection.
+ *
+ * @param client_ptr A pointer to the client's TCP connection.
+ * @param response_data The data to be sent as a response.
+ * @param len The length of the response data.
+ * @return Returns 0 if the response was sent successfully, or an error code if there was an error.
+ */
 DART_EXPORT int send_response_to_client(int64_t client_ptr, const char *response_data, size_t len);
 
-// Получение метрик
+/**
+ * @brief Get metrics
+ *
+ */
 DART_EXPORT void metrics();
 
-// Закрытие сервера
+/**
+ * Closes the server by closing all the loops and freeing the memory allocated for them.
+ * Also clears all requests from the queue and destroys the queue mutex and condition variable.
+ * @param None
+ * @return None
+ * @note This function should be called only after all the requests have been processed and the server is no longer
+ * needed.
+ * @note This function should not be called from any of the worker threads.
+ * @note This function is exported to Dart.
+ * @see clear_all_requests(), uv_mutex_destroy(), uv_cond_destroy(), uv_barrier_destroy(), uv_loop_close(), free()
+ */
 DART_EXPORT void close_server();
 
 #endif
