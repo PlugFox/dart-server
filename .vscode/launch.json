@@ -2,6 +2,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "[Dart] Debug Client",
+            "type": "dart",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/main.dart",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {},
+            "preLaunchTask": "build debug"
+        },
+        {
             "name": "[C] Debug Server",
             "type": "cppdbg",
             "request": "launch",
