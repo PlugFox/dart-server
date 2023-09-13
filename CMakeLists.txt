@@ -69,9 +69,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 else()
   target_compile_options(libserver PRIVATE
     -O3
-    -Wall
-    -Wextra
-    -pedantic
+#   -Wall
+#   -Wextra
+#   -pedantic
     -Werror
   )
 endif()

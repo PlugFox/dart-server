@@ -517,7 +517,6 @@ DART_EXPORT Request *get_request() {
  * @param status The status of the write operation.
  */
 void after_write(uv_write_t *req, int status) {
-    fprintf(stderr, "after_write\n");
     if (status) {
         fprintf(stderr, "uv_write error: %s\n", uv_strerror(status));
     }
