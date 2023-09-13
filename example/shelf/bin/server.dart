@@ -36,15 +36,15 @@ Future<Response> _echoHandler(Request request) async {
 
 FutureOr<Response> _jsonHandler(Request request) async {
   final rawJson = await request.readAsString();
-  final json = jsonDecode(rawJson) as Map<String, Object?>;
-  return Response.ok(jsonEncode(json));
+  if (rawJson.isEmpty) return Response.ok('Empty body');
+  return Response.ok(jsonEncode(jsonDecode(rawJson)));
 }
 
 void main(List<String> args) async {
   final isolatesCount = args.isNotEmpty ? int.parse(args.first) : 4;
   // Start a server for each isolate.
   for (var i = 0; i < isolatesCount; i++) {
-    final port = 8080;
+    final port = 3000;
     final receivePort = ReceivePort();
 
     Completer<SendPort> sendPort = Completer();

@@ -12,12 +12,7 @@ void main() => serve(
             '${DateTime.now().toUtc().toIso8601String()}'; */
         if (request.contentLength == 0) return 'Empty body';
         final text = utf8.decode(request.body);
-        if (text.isEmpty) return 'Empty text';
-        if (!text.startsWith('{') || !text.endsWith('}')) {
-          return 'Invalid JSON';
-        }
-        final json = jsonDecode(text);
-        return jsonEncode(json);
+        return jsonEncode(jsonDecode(text));
       },
       address: InternetAddress.anyIPv4,
       port: 3000,
