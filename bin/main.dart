@@ -17,5 +17,5 @@ void main() => serve(
       address: InternetAddress.anyIPv4,
       port: 3000,
       backlog: 128,
-      workers: 4,
+      workers: 10,
     );

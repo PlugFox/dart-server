@@ -1,0 +1,44 @@
+CivetWeb
+Time taken for tests:   40.100 seconds
+Complete requests:      100000
+Failed requests:        129
+Requests per second:    2493.77 [#/sec] (mean)
+Time per request:       400.999 [ms] (mean)
+Time per request:       0.401 [ms] (mean, across all concurrent requests)
+Transfer rate:          136.21 [Kbytes/sec] received
+----- ----- ----- ----- -----
+Dart + Shelf
+Time taken for tests:   12.758 seconds
+Complete requests:      100000
+Failed requests:        0
+Requests per second:    7837.96 [#/sec] (mean)
+Time per request:       127.584 [ms] (mean)
+Time per request:       0.128 [ms] (mean, across all concurrent requests)
+Transfer rate:          2005.42 [Kbytes/sec] received
+----- ----- ----- ----- -----
+Node.js
+Time taken for tests:   10.457 seconds
+Complete requests:      100000
+Failed requests:        0
+Requests per second:    9562.88 [#/sec] (mean)
+Time per request:       104.571 [ms] (mean)
+Time per request:       0.105 [ms] (mean, across all concurrent requests)
+Transfer rate:          1055.28 [Kbytes/sec] received
+----- ----- ----- ----- -----
+C# Asn.Net.Core
+Time taken for tests:   12.067 seconds
+Complete requests:      100000
+Failed requests:        0
+Requests per second:    8287.02 [#/sec] (mean)
+Time per request:       120.671 [ms] (mean)
+Time per request:       0.121 [ms] (mean, across all concurrent requests)
+Transfer rate:          841.65 [Kbytes/sec] received
+----- ----- ----- ----- -----
+Go fasthttp
+Time taken for tests:   9.170 seconds
+Complete requests:      100000
+Failed requests:        0
+Requests per second:    10905.00 [#/sec] (mean)
+Time per request:       91.701 [ms] (mean)
+Time per request:       0.092 [ms] (mean, across all concurrent requests)
+Transfer rate:          1757.15 [Kbytes/sec] received

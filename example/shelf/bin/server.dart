@@ -21,8 +21,14 @@ final class IsolateConfig {
 
 // Configure routes.
 final _router = Router()
+  ..get('/', _getHandler)
+  ..options('/', _optionsHandler)
   ..get('/echo', _echoHandler)
   ..post('/json', _jsonHandler);
+
+FutureOr<Response> _getHandler(Request request) => Response.ok('Hello World');
+
+FutureOr<Response> _optionsHandler(Request request) => Response.ok(null);
 
 Future<Response> _echoHandler(Request request) async {
   final unixTime = DateTime.now().millisecondsSinceEpoch;
@@ -41,10 +47,10 @@ FutureOr<Response> _jsonHandler(Request request) async {
 }
 
 void main(List<String> args) async {
-  final isolatesCount = args.isNotEmpty ? int.parse(args.first) : 4;
+  final isolatesCount = args.isNotEmpty ? int.parse(args.first) : 10;
   // Start a server for each isolate.
   for (var i = 0; i < isolatesCount; i++) {
-    final port = 3000;
+    final port = 8080;
     final receivePort = ReceivePort();
 
     Completer<SendPort> sendPort = Completer();
